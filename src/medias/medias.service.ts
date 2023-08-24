@@ -1,26 +1,47 @@
-import { Injectable } from '@nestjs/common';
-import { CreateMediaDto } from './dto/create-media.dto';
-import { UpdateMediaDto } from './dto/update-media.dto';
+import { HttpException, Injectable } from '@nestjs/common';
+import { mediaDto } from './dto/media.dto';
+import { MediasRepository } from './medias.repository';
+
 
 @Injectable()
 export class MediasService {
-  create(createMediaDto: CreateMediaDto) {
-    return 'This action adds a new media';
+
+  constructor(private readonly repository: MediasRepository) { }
+
+  async create(body: mediaDto) {
+    await this.verifyDuplicates(body)
+    return await this.repository.createMedia(body)
   }
 
-  findAll() {
-    return `This action returns all medias`;
+  async verifyDuplicates(body: mediaDto) {
+    const duplicatedMedia = await this.repository.getDublicadetMedia(body)
+    if (duplicatedMedia) throw new HttpException("This media is already registered.", 409)
   }
 
-  findOne(id: number) {
-    return `This action returns a #${id} media`;
+  async findAll() {
+    return await this.repository.getAllMedias()
   }
 
-  update(id: number, updateMediaDto: UpdateMediaDto) {
-    return `This action updates a #${id} media`;
+  async findOne(id: number) {
+    const media = await this.repository.getMediaById(id)
+    if (!media) throw new HttpException("Media not Found", 404)
+    return media
   }
 
-  remove(id: number) {
-    return `This action removes a #${id} media`;
+  async update(id: number, body: mediaDto) {
+    await this.findOne(id)
+    await this.verifyDuplicates(body)
+    return this.repository.updateMedia(id, body)
+  }
+
+  async remove(id: number) {
+    await this.findOne(id)
+    await this.findConflict(id)
+    return await this.repository.deleteMedia(id)
+  }
+
+  async findConflict(id: number){
+    const conflict = await this.repository.findConflict(id)
+    if(conflict) throw new HttpException("This media is already registered in a publication.", 403)
   }
 }
