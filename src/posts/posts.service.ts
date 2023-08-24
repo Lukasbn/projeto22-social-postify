@@ -1,26 +1,55 @@
-import { Injectable } from '@nestjs/common';
-import { CreatePostDto } from './dto/create-post.dto';
-import { UpdatePostDto } from './dto/update-post.dto';
+import { HttpException, Injectable } from '@nestjs/common';
+import { postDto } from './dto/create-post.dto';
+import { PostRepository } from './posts.repository';
+import { Post } from '@prisma/client';
 
 @Injectable()
 export class PostsService {
-  create(createPostDto: CreatePostDto) {
-    return 'This action adds a new post';
+  constructor(private readonly repository: PostRepository) {}
+
+  async create(body: postDto) {
+    return await this.repository.createPost(body);
   }
 
-  findAll() {
-    return `This action returns all posts`;
+  async findAll() {
+    const posts = await this.repository.getPosts();
+    return this.formatPost(posts);
   }
 
-  findOne(id: number) {
-    return `This action returns a #${id} post`;
+  formatPost(posts: Post[]) {
+    const result = posts.map((post) => ({
+      id: post.id,
+      title: post.title,
+      text: post.text,
+      ...(post.image && { image: post.image }),
+    }));
+    return result;
   }
 
-  update(id: number, updatePostDto: UpdatePostDto) {
-    return `This action updates a #${id} post`;
+  async findOne(id: number) {
+    const post = await this.repository.getPostById(id);
+    if (!post) throw new HttpException('Post not Found', 404);
+    return {
+      id: post.id,
+      title: post.title,
+      text: post.text,
+      ...(post.image && { image: post.image }),
+    };
   }
 
-  remove(id: number) {
-    return `This action removes a #${id} post`;
+  async update(id: number, body: postDto) {
+    await this.findOne(id);
+    return this.repository.updatePost(id, body);
+  }
+
+  async remove(id: number) {
+    await this.findOne(id);
+    const conflict = await this.repository.findConflict(id);
+    if (conflict)
+      throw new HttpException(
+        'This media is already registered in a publication.',
+        403,
+      );
+    return await this.repository.deletePost(id);
   }
 }
